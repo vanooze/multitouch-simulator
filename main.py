@@ -1,7 +1,7 @@
 import cv2
 import pyautogui
 import numpy as np
-
+import time
 from config import HOVER_DEPTH_THRESHOLD
 from mediapipe_module import BodyTracker  # Import BodyTracker instead of HandTracker
 from astra_depth import AstraDepthReader
@@ -11,6 +11,7 @@ import config
 touched = False
 corners = []
 calibration_complete = False
+last_click_time = 0
 
 def on_mouse_click(event, x, y, flags, param):
     global corners, calibration_complete
@@ -21,7 +22,7 @@ def on_mouse_click(event, x, y, flags, param):
             calibration_complete = True
 
 def main():
-    global corners, calibration_complete, touched
+    global corners, calibration_complete, touched, last_click_time
 
     cap = cv2.VideoCapture(config.CAMERA_INDEX)
     cap.set(3, config.FRAME_WIDTH)
@@ -88,35 +89,18 @@ def main():
                         raw_depth = depth_reader._get_median_depth(depth_map, x, y)
                         depth_mm = depth_reader.get_smoothed_depth(depth_map, x, y)
                         virtual_depth = depth_reader.get_interpolated_virtual_depth(x, y)
-
+                        diff = virtual_depth - depth_mm
                         cv2.putText(frame, f"Hand: {depth_mm} mm", (x + 10, y - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 200), 2)
                         cv2.putText(frame, f"Plane: {virtual_depth if virtual_depth else 0} mm",
                                     (x + 10, y + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 2)
 
-                        # Check if the body part (index) is inside the calibrated virtual space
-                        if virtual_depth and depth_mm > virtual_depth - config.HOVER_DEPTH_THRESHOLD:
-                            # Check if the finger is within the 4-corner calibrated space
+                       # Check if the body part(Index) is inside the calibrated virtual space
+                        if virtual_depth and 0 < diff < config.TOUCH_DEPTH_THRESHOLD:
                             if cv2.pointPolygonTest(np.array(corners, dtype=np.int32), (x, y), False) >= 0:
-                                color = (0, 255, 0)  # Hovering
-                                touched = False
+                                color = (0, 0, 255)  # Touching
 
-                                # Normalize the finger's the position to calibrated virtual space
-                                norm_x = np.interp(x, [min_x, max_x], [0, 1])
-                                norm_y = np.interp(y, [min_y, max_y], [0, 1])
-
-                                # Now map the normalized coordinates to the screen
-                                screen_x = int(norm_x * screen_w)
-                                screen_y = int(norm_y * screen_h)
-
-                                # Move the mouse to the new position
-                                pyautogui.moveTo(screen_x, screen_y)
-
-                        # Touch detection: finger within touch threshold
-                        elif virtual_depth and depth_mm < virtual_depth - config.TOUCH_DEPTH_THRESHOLD:
-                            color = (0, 0, 255)  # Touching
-                            if not touched:
-                                # Map finger coordinates from camera to virtual space
+                                # Normalize the finger's position to calibrated virtual space
                                 norm_x = np.interp(x, [min_x, max_x], [0, 1])
                                 norm_y = np.interp(y, [min_y, max_y], [0, 1])
 
@@ -124,10 +108,30 @@ def main():
                                 screen_x = int(norm_x * screen_w)
                                 screen_y = int(norm_y * screen_h)
 
-                                # Click at the calculated screen coordinates
-                                pyautogui.click(screen_x, screen_y)
-                                touched = True
+                                pyautogui.mouseDown(screen_x, screen_y)
+                                print("Touch (mouse down) at:", screen_x, screen_y)
 
+                                touched = True
+                        # Check if the body part (index) is inside the calibrated virtual space
+                        elif virtual_depth and config.TOUCH_DEPTH_THRESHOLD <= diff < config.HOVER_DEPTH_THRESHOLD:
+
+                            if cv2.pointPolygonTest(np.array(corners, dtype=np.int32), (x, y), False) >= 0:
+                                if touched:
+                                    pyautogui.mouseUp()
+                                    color = (0, 255, 0)  # Hovering
+                                    touched = False
+
+                                    # Normalize the finger's position to calibrated virtual space
+                                    norm_x = np.interp(x, [min_x, max_x], [0, 1])
+                                    norm_y = np.interp(y, [min_y, max_y], [0, 1])
+
+                                    # Now map the normalized coordinates to the screen
+                                    screen_x = int(norm_x * screen_w)
+                                    screen_y = int(norm_y * screen_h)
+
+                                    # Move the mouse to the new position
+                                    pyautogui.moveTo(screen_x, screen_y)
+                                    print("Hovering at:", screen_x, screen_y)
                     cv2.circle(frame, (x, y), 10, color, cv2.FILLED)
 
         cv2.imshow("Virtual Touchscreen", frame)
@@ -138,5 +142,5 @@ def main():
     depth_reader.shutdown()
     cv2.destroyAllWindows()
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     main()
