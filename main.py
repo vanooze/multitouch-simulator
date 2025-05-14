@@ -1,6 +1,8 @@
 import cv2
 import pyautogui
 import numpy as np
+
+from config import HOVER_DEPTH_THRESHOLD
 from mediapipe_module import BodyTracker  # Import BodyTracker instead of HandTracker
 from astra_depth import AstraDepthReader
 import config
@@ -93,13 +95,13 @@ def main():
                                     (x + 10, y + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 2)
 
                         # Check if the body part (index) is inside the calibrated virtual space
-                        if virtual_depth and 0 < depth_mm < virtual_depth - config.HOVER_DEPTH_THRESHOLD:
+                        if virtual_depth and depth_mm > virtual_depth - config.HOVER_DEPTH_THRESHOLD:
                             # Check if the finger is within the 4-corner calibrated space
                             if cv2.pointPolygonTest(np.array(corners, dtype=np.int32), (x, y), False) >= 0:
                                 color = (0, 255, 0)  # Hovering
                                 touched = False
 
-                                # Normalize the finger's position to the calibrated virtual space
+                                # Normalize the finger's the position to calibrated virtual space
                                 norm_x = np.interp(x, [min_x, max_x], [0, 1])
                                 norm_y = np.interp(y, [min_y, max_y], [0, 1])
 
@@ -111,8 +113,8 @@ def main():
                                 pyautogui.moveTo(screen_x, screen_y)
 
                         # Touch detection: finger within touch threshold
-                        elif virtual_depth and 0 < depth_mm < virtual_depth - config.TOUCH_DEPTH_THRESHOLD:
-                            color = (0, 255, 0)  # Touching
+                        elif virtual_depth and depth_mm < virtual_depth - config.TOUCH_DEPTH_THRESHOLD:
+                            color = (0, 0, 255)  # Touching
                             if not touched:
                                 # Map finger coordinates from camera to virtual space
                                 norm_x = np.interp(x, [min_x, max_x], [0, 1])

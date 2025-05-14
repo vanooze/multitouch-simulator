@@ -20,5 +20,5 @@ DEPTH_MEDIAN_FILTER_SIZE = 5
 VIRTUAL_SCREEN_CORNERS = [(100, 100), (400, 100), (100, 300), (400, 300)]
 
 # Optional: Depth Threshold for Virtual Space (if needed)
-HOVER_DEPTH_THRESHOLD = 1000
-VIRTUAL_SCREEN_DEPTH_THRESHOLD = 600  # Can be modified during calibration
+HOVER_DEPTH_THRESHOLD = 800
+VIRTUAL_SCREEN_DEPTH_THRESHOLD = 300  # Can be modified during calibration
