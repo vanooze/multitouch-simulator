@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # multitouch-simulator
 =======
 
@@ -15,4 +15,3 @@ Multitouch Simulator using mediapipe pose for fully body tracking and orbbec ast
 
 
 **Check config.py to configure any changes.**
->>>>>>> master
