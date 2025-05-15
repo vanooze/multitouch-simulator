@@ -16,6 +16,7 @@ class LogicHandler:
         self.screen_w, self.screen_h = pyautogui.size()
         self.virtual_planes = []  # List of dicts for each calibrated face plane data
         self.merged_planes = []   # Merged polygons and info for proportional mapping
+        self.last_mode = None
 
     def calculate_plane_depths(self):
         self.virtual_planes.clear()
@@ -124,79 +125,122 @@ class LogicHandler:
         if color_frame is None or depth_map is None:
             return frame
 
-        frame = self.tracker.find_pose(color_frame)
-        all_landmarks = self.tracker.get_landmarks(frame.shape)
+        # STEP 1: Get both hand and pose frames/landmarks
+        hands_frame = self.tracker.find_hands(color_frame.copy())
+        hands_landmarks = self.tracker.get_hand_landmarks(hands_frame.shape)
 
-        # Draw merged calibrated faces
+        pose_frame = self.tracker.find_pose(color_frame.copy())
+        pose_landmarks = self.tracker.get_pose_landmarks(pose_frame.shape)
+
+        use_hands = False
+        active_landmarks = []
+        selected_frame = frame
+        current_depth = None
+
+        # STEP 2: Use pose depth silently for current_depth stability
+        if pose_landmarks:
+            px, py = pose_landmarks[0][19]  # pose index fingertip
+            pose_depth = self.depth_reader.get_smoothed_depth(depth_map, int(px), int(py))
+            if pose_depth:
+                current_depth = pose_depth
+        elif hands_landmarks:
+            hx, hy = hands_landmarks[0][8]  # hand index fingertip fallback
+            hand_depth = self.depth_reader.get_smoothed_depth(depth_map, int(hx), int(hy))
+            if hand_depth:
+                current_depth = hand_depth
+
+        # STEP 3: Apply hysteresis for smooth mode switching
+        if current_depth is not None:
+            upper_limit = config.DEPTH_HAND_THRESHOLD + config.HYSTERESIS_MARGIN
+            lower_limit = config.DEPTH_HAND_THRESHOLD - config.HYSTERESIS_MARGIN
+
+            if getattr(self, "last_mode", None) == "hands":
+                use_hands = current_depth < upper_limit
+            elif getattr(self, "last_mode", None) == "pose":
+                use_hands = current_depth < lower_limit
+            else:
+                use_hands = current_depth < config.DEPTH_HAND_THRESHOLD
+
+        # STEP 4: Select active landmarks and frame for display
+        if use_hands and hands_landmarks:
+            active_landmarks = hands_landmarks
+            selected_frame = hands_frame
+            self.last_mode = "hands"
+        elif pose_landmarks:
+            active_landmarks = pose_landmarks
+            selected_frame = pose_frame
+            self.last_mode = "pose"
+        else:
+            self.last_mode = None
+
+        # STEP 5: Draw face polygons
         for plane in self.merged_planes:
-            cv2.polylines(frame, [plane["points"]], isClosed=True, color=(0, 255, 255), thickness=2)
+            cv2.polylines(selected_frame, [plane["points"]], isClosed=True, color=(0, 255, 255), thickness=2)
 
-        if all_landmarks and self.merged_planes:
-            for landmarks in all_landmarks:
-                if len(landmarks) <= 20:
+        # STEP 6: Interaction logic with depth display
+        if active_landmarks and self.merged_planes:
+            for landmarks in active_landmarks:
+                pointer = landmarks[8] if use_hands else landmarks[20]
+                x, y = int(pointer[0]), int(pointer[1])
+
+                if not (0 <= x < depth_map.shape[1] and 0 <= y < depth_map.shape[0]):
                     continue
-                index_tip = landmarks[20]
-                x, y = int(index_tip[0]), int(index_tip[1])
 
-                if 0 <= x < depth_map.shape[1] and 0 <= y < depth_map.shape[0]:
-                    depth_mm = self.depth_reader.get_smoothed_depth(depth_map, x, y)
-                    if depth_mm is None:
-                        continue
+                depth_mm = self.depth_reader.get_smoothed_depth(depth_map, x, y)
+                if depth_mm is None:
+                    continue
 
-                    over_face_idx = None
-                    virtual_depth = None
-                    for i, plane in enumerate(self.merged_planes):
-                        if plane["polygon"].contains(Point(x, y)):
-                            virtual_depth = self.interpolate_depth(x, y, plane)
-                            over_face_idx = i
+                over_face_idx, virtual_depth = None, None
+                for i, plane in enumerate(self.merged_planes):
+                    if plane["polygon"].contains(Point(x, y)):
+                        virtual_depth = self.interpolate_depth(x, y, plane)
+                        over_face_idx = i
+                        break
+
+                if virtual_depth is None:
+                    color = (200, 200, 200)
+                else:
+                    color = (0, 0, 255)
+                    # Show pointer depth
+                    cv2.putText(selected_frame, f"Depth: {depth_mm} mm", (x + 10, y - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+                    # Show virtual plane depth (distance to virtual surface)
+                    cv2.putText(selected_frame, f"Plane: {virtual_depth:.1f} mm", (x + 10, y - 25),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 2)
+
+                    # Compute proportional screen coordinates (unchanged)
+                    total_area = sum(p["area"] for p in self.merged_planes)
+                    cumulative_width = 0
+                    for idx, plane in enumerate(self.merged_planes):
+                        slice_width = (plane["area"] / total_area) * self.screen_w
+                        if idx == over_face_idx:
+                            pts = plane["points"]
+                            min_x, max_x = pts[:, 0].min(), pts[:, 0].max()
+                            min_y, max_y = pts[:, 1].min(), pts[:, 1].max()
+                            norm_x = np.interp(x, [min_x, max_x], [0, 1])
+                            norm_y = np.interp(y, [min_y, max_y], [0, 1])
+
+                            screen_x = int(cumulative_width + norm_x * slice_width)
+                            screen_y = int(norm_y * self.screen_h)
                             break
+                        cumulative_width += slice_width
 
-                    if virtual_depth is None:
-                        color = (200, 200, 200)
-                    else:
-                        color = (0, 0, 255)
-
-                        cv2.putText(frame, f"Face {over_face_idx+1}", (x+10, y-40),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-                        cv2.putText(frame, f"Hand Depth: {depth_mm} mm", (x + 10, y - 25),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 200), 2)
-                        cv2.putText(frame, f"Plane Depth: {virtual_depth:.1f} mm", (x + 10, y - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 2)
-
-                        # Dynamically scale slice widths by polygon area
-                        total_area = sum(p["area"] for p in self.merged_planes)
-                        cumulative_width = 0
-                        screen_x = 0
-
-                        # Find horizontal slices for faces proportional to area
-                        for idx, plane in enumerate(self.merged_planes):
-                            slice_width = (plane["area"] / total_area) * self.screen_w
-                            if idx == over_face_idx:
-                                # Map x inside polygon bounding box to normalized [0,1]
-                                pts = plane["points"]
-                                min_x, max_x = pts[:, 0].min(), pts[:, 0].max()
-                                min_y, max_y = pts[:, 1].min(), pts[:, 1].max()
-                                norm_x = np.interp(x, [min_x, max_x], [0, 1])
-                                norm_y = np.interp(y, [min_y, max_y], [0, 1])
-
-                                screen_x = int(cumulative_width + norm_x * slice_width)
-                                screen_y = int(norm_y * self.screen_h)
-                                break
-                            cumulative_width += slice_width
-
-                        if depth_mm > virtual_depth - config.HOVER_DEPTH_THRESHOLD:
-                            color = (0, 255, 0)
-                            pyautogui.moveTo(screen_x, screen_y)
+                    # Hover/hold logic (unchanged)
+                    if depth_mm > virtual_depth - config.HOVER_DEPTH_THRESHOLD:
+                        color = (0, 255, 0)
+                        pyautogui.moveTo(screen_x, screen_y)
+                        if self.touched:
+                            pyautogui.mouseUp()
                             self.touched = False
-                        elif depth_mm < virtual_depth - config.TOUCH_DEPTH_THRESHOLD:
-                            color = (0, 0, 255)
-                            if not self.touched:
-                                pyautogui.click(screen_x, screen_y)
-                                self.touched = True
+                    elif depth_mm < virtual_depth - config.TOUCH_DEPTH_THRESHOLD:
+                        color = (0, 0, 255)
+                        if not self.touched:
+                            pyautogui.mouseDown()
+                            self.touched = True
 
-                    cv2.circle(frame, (x, y), 5, color, cv2.FILLED)
+                cv2.circle(selected_frame, (x, y), 5, color, cv2.FILLED)
 
-        return frame
+        return selected_frame
 
     def shutdown(self):
         self.depth_reader.shutdown()
