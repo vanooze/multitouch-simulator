@@ -24,7 +24,7 @@ HOVER_DEPTH_THRESHOLD = 800
 VIRTUAL_SCREEN_DEPTH_THRESHOLD = 300  # Can be modified during calibration
 
 # Depth thresholds for switching tracking modes
-DEPTH_HAND_THRESHOLD = 1500  # mm
+DEPTH_HAND_THRESHOLD = 4000  # mm
 
 # Hysteresis range (in mm)
-HYSTERESIS_MARGIN = 100  # +/- around threshold
+HYSTERESIS_MARGIN = 300  # +/- around threshold
