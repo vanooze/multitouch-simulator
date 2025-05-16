@@ -1,30 +1,35 @@
-# Camera settings
+# =======================
+# Camera Configuration
+# =======================
 CAMERA_INDEX = 0
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
-# Virtual touchpad position in webcam feed (default position)
+# =======================
+# Touchpad Settings (Legacy/Optional)
+# =======================
 TOUCHPAD_TOP_LEFT = (100, 100)
 TOUCHPAD_WIDTH = 300
 TOUCHPAD_HEIGHT = 200
 
-# Depth threshold in mm (e.g., touching if closer than this)
-TOUCH_DEPTH_THRESHOLD = 600
+# =======================
+# Depth Thresholds (in mm)
+# =======================
+TOUCH_DEPTH_THRESHOLD = 700         # Depth difference to trigger a touch
+HOVER_DEPTH_THRESHOLD = 1500       # Above this, considered hover
+VIRTUAL_SCREEN_DEPTH_THRESHOLD = 300
 
-# Smoothing parameters
+# =======================
+# Smoothing Parameters
+# =======================
 DEPTH_SMOOTHING_KERNEL = 5
 DEPTH_MEDIAN_FILTER_SIZE = 5
 
-# Virtual Screen Calibration (4 corner points, default values)
+# =======================
+# Default Virtual Screen Calibration
 # Format: (x, y) coordinates
-VIRTUAL_SCREEN_CORNERS = [(100, 100), (400, 100), (100, 300), (400, 300)]
-
-# Optional: Depth Threshold for Virtual Space (if needed)
-HOVER_DEPTH_THRESHOLD = 800
-VIRTUAL_SCREEN_DEPTH_THRESHOLD = 300  # Can be modified during calibration
-
-# Depth thresholds for switching tracking modes
-DEPTH_HAND_THRESHOLD = 4000  # mm
-
-# Hysteresis range (in mm)
-HYSTERESIS_MARGIN = 300  # +/- around threshold
+# =======================
+VIRTUAL_SCREEN_CORNERS = [
+    (100, 100), (400, 100),
+    (100, 300), (400, 300)
+]
