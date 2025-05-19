@@ -129,9 +129,8 @@ class LogicHandler:
         pose_frame = self.tracker.find_pose(color_frame.copy())
         pose_landmarks = self.tracker.get_pose_landmarks(pose_frame.shape)
         selected_frame = pose_frame
-        pointer_indices = [19, 20, 31, 32]  # Left & right hand, left & right foot
+        pointer_indices = [19, 20, 31, 32]
 
-        # Draw virtual planes
         for plane in self.merged_planes:
             cv2.polylines(selected_frame, [plane["points"]], isClosed=True, color=(0, 255, 255), thickness=2)
 
@@ -157,13 +156,11 @@ class LogicHandler:
 
                     color = (200, 200, 200)
                     if virtual_depth is not None:
-                        # Show depth text
                         cv2.putText(selected_frame, f"Depth: {depth_mm} mm", (px + 10, py - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
                         cv2.putText(selected_frame, f"Plane: {virtual_depth:.1f} mm", (px + 10, py - 25),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 200), 2)
 
-                        # Map to screen coordinates
                         total_area = sum(p["area"] for p in self.merged_planes)
                         cumulative_width = 0
                         for i, plane in enumerate(self.merged_planes):
@@ -179,15 +176,13 @@ class LogicHandler:
                                 break
                             cumulative_width += slice_width
 
-                        # Smooth the cursor movement
+                        # Smooth mouse movement
                         if not hasattr(self, "prev_mouse_pos") or self.prev_mouse_pos is None:
                             self.prev_mouse_pos = (screen_x, screen_y)
 
-                        smooth_x = int(self.prev_mouse_pos[0] *
-                                       (1 - config.MOUSE_SMOOTH_FACTOR)
+                        smooth_x = int(self.prev_mouse_pos[0] * (1 - config.MOUSE_SMOOTH_FACTOR)
                                        + screen_x * config.MOUSE_SMOOTH_FACTOR)
-                        smooth_y = int(self.prev_mouse_pos[1] *
-                                       (1 - config.MOUSE_SMOOTH_FACTOR)
+                        smooth_y = int(self.prev_mouse_pos[1] * (1 - config.MOUSE_SMOOTH_FACTOR)
                                        + screen_y * config.MOUSE_SMOOTH_FACTOR)
 
                         smooth_x = max(0, min(self.screen_w - 1, smooth_x))
@@ -195,29 +190,43 @@ class LogicHandler:
 
                         self.prev_mouse_pos = (smooth_x, smooth_y)
 
-                        # Hover / Touch with click-once logic
                         depth_diff = virtual_depth - depth_mm
                         hover_thresh = config.HOVER_DEPTH_THRESHOLD
                         touch_thresh = config.TOUCH_DEPTH_THRESHOLD
+                        landmark_id = f"{idx}_{over_face_idx}"
 
-                        landmark_id = f"{idx}_{over_face_idx}"  # Unique per landmark+plane
+                        # Init state if needed
+                        if not hasattr(self, "touch_frame_counters"):
+                            self.touch_frame_counters = {}
+                        if landmark_id not in self.touch_frame_counters:
+                            self.touch_frame_counters[landmark_id] = 0
+                        if not hasattr(self, "prev_touch_states"):
+                            self.prev_touch_states = {}
 
+                        # Debounced hover/touch detection
                         if depth_diff < hover_thresh:
-                            color = (0, 255, 0)  # Hover
+                            color = (0, 255, 0)
                             if 0 <= smooth_x < self.screen_w and 0 <= smooth_y < self.screen_h:
                                 pyautogui.moveTo(smooth_x, smooth_y)
                             print("Hovering")
-                            self.prev_touch_states[landmark_id] = False  # Reset
-                        elif depth_diff < touch_thresh:
-                            color = (0, 0, 255)  # Touch
-                            print("Touching")
-                            if 0 <= smooth_x < self.screen_w and 0 <= smooth_y < self.screen_h:
-                                pyautogui.moveTo(smooth_x, smooth_y)
-                            if not self.prev_touch_states.get(landmark_id, False):
-                                pyautogui.click()
-                                self.prev_touch_states[landmark_id] = True
+                            self.touch_frame_counters[landmark_id] += 1
+                            if self.touch_frame_counters[landmark_id] >= config.RESET_SMOOTH_FRAMES:
+                                self.prev_touch_states[landmark_id] = False
                         else:
-                            self.prev_touch_states[landmark_id] = False  # Reset if in between
+                            self.touch_frame_counters[landmark_id] = 0
+
+                            if depth_diff < touch_thresh:
+                                color = (0, 0, 255)
+                                print("Touching")
+                                if 0 <= smooth_x < self.screen_w and 0 <= smooth_y < self.screen_h:
+                                    pyautogui.moveTo(smooth_x, smooth_y)
+                                if not self.prev_touch_states.get(landmark_id, False):
+                                    self.touch_frame_counters[landmark_id] += 1
+                                    if self.touch_frame_counters[landmark_id] >= config.TOUCH_SMOOTH_FRAMES:
+                                        pyautogui.click()
+                                        self.prev_touch_states[landmark_id] = True
+                            else:
+                                self.prev_touch_states[landmark_id] = False
 
                     cv2.circle(selected_frame, (px, py), 5, color, cv2.FILLED)
 

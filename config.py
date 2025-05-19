@@ -18,6 +18,8 @@ TOUCHPAD_HEIGHT = 200
 TOUCH_DEPTH_THRESHOLD = 700         # Depth difference to trigger a touch
 HOVER_DEPTH_THRESHOLD = 1500       # Above this, considered hover
 VIRTUAL_SCREEN_DEPTH_THRESHOLD = 300
+TOUCH_SMOOTH_FRAMES = 3 # Switch if the depth stays in range for ~3 frames.
+RESET_SMOOTH_FRAMES = 3
 
 # =======================
 # Smoothing Parameters
