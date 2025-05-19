@@ -17,6 +17,7 @@ class LogicHandler:
         self.merged_planes = []   # Merged polygons and info for proportional mapping
         self.prev_touch_states = {}
         self.last_mode = None
+        self.prev_mouse_pos = None
 
     def calculate_plane_depths(self):
         self.virtual_planes.clear()
@@ -67,7 +68,7 @@ class LogicHandler:
 
             depths = []
             for (x, y) in pts:
-                # For each vertex, find closest depth from all original planes corners
+                # For each vertex, find the closest depth from all original planes corners
                 min_dist = float('inf')
                 chosen_depth = 1000
                 for plane in self.virtual_planes:
@@ -178,20 +179,40 @@ class LogicHandler:
                                 break
                             cumulative_width += slice_width
 
+                        # Smooth the cursor movement
+                        if not hasattr(self, "prev_mouse_pos") or self.prev_mouse_pos is None:
+                            self.prev_mouse_pos = (screen_x, screen_y)
+
+                        smooth_x = int(self.prev_mouse_pos[0] *
+                                       (1 - config.MOUSE_SMOOTH_FACTOR)
+                                       + screen_x * config.MOUSE_SMOOTH_FACTOR)
+                        smooth_y = int(self.prev_mouse_pos[1] *
+                                       (1 - config.MOUSE_SMOOTH_FACTOR)
+                                       + screen_y * config.MOUSE_SMOOTH_FACTOR)
+
+                        smooth_x = max(0, min(self.screen_w - 1, smooth_x))
+                        smooth_y = max(0, min(self.screen_h - 1, smooth_y))
+
+                        self.prev_mouse_pos = (smooth_x, smooth_y)
+
                         # Hover / Touch with click-once logic
-                        hover_thresh = virtual_depth - config.HOVER_DEPTH_THRESHOLD
-                        touch_thresh = virtual_depth - config.TOUCH_DEPTH_THRESHOLD
+                        depth_diff = virtual_depth - depth_mm
+                        hover_thresh = config.HOVER_DEPTH_THRESHOLD
+                        touch_thresh = config.TOUCH_DEPTH_THRESHOLD
 
                         landmark_id = f"{idx}_{over_face_idx}"  # Unique per landmark+plane
 
-                        if depth_mm > hover_thresh:
+                        if depth_diff < hover_thresh:
                             color = (0, 255, 0)  # Hover
-                            pyautogui.moveTo(screen_x, screen_y)
+                            if 0 <= smooth_x < self.screen_w and 0 <= smooth_y < self.screen_h:
+                                pyautogui.moveTo(smooth_x, smooth_y)
+                            print("Hovering")
                             self.prev_touch_states[landmark_id] = False  # Reset
-                        elif depth_mm < touch_thresh:
+                        elif depth_diff < touch_thresh:
                             color = (0, 0, 255)  # Touch
-                            pyautogui.moveTo(screen_x, screen_y)
-
+                            print("Touching")
+                            if 0 <= smooth_x < self.screen_w and 0 <= smooth_y < self.screen_h:
+                                pyautogui.moveTo(smooth_x, smooth_y)
                             if not self.prev_touch_states.get(landmark_id, False):
                                 pyautogui.click()
                                 self.prev_touch_states[landmark_id] = True

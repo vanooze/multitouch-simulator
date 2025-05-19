@@ -24,6 +24,7 @@ VIRTUAL_SCREEN_DEPTH_THRESHOLD = 300
 # =======================
 DEPTH_SMOOTHING_KERNEL = 5
 DEPTH_MEDIAN_FILTER_SIZE = 5
+MOUSE_SMOOTH_FACTOR = 0.2 # 0.0 no smoothing, 1.0 = full smoothing (no movement)
 
 # =======================
 # Default Virtual Screen Calibration
