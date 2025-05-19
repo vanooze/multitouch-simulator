@@ -1,5 +1,5 @@
 
-# multitouch-simulator
+##multitouch-simulator
 
 Multitouch Simulator using mediapipe pose for fully body tracking and orbbec astra for 3d mapping. Using the mediapipe pose landmark 20 (right index) for mouse movement and action. 
 
@@ -12,4 +12,4 @@ Multitouch Simulator using mediapipe pose for fully body tracking and orbbec ast
 6. try and test using your right hand if its working
 
 
-**Check config.py to configure any changes.**
+**Check config.py to configure and customization.**
