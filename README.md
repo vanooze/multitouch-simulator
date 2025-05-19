@@ -3,7 +3,7 @@
 
 Multitouch Simulator using mediapipe pose for fully body tracking and orbbec astra for 3d mapping. Using the mediapipe pose landmark 20 (right index) for mouse movement and action. 
 
-//HOW TO RUN
+## HOW TO RUN
 1. Download or copy the repository
 2. install any necessary packages required or just run this on the terminal **pip install openni opencv-python numpy pyautogui mediapipe**
 3. run the main.py
