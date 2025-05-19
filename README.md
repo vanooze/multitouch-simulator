@@ -1,5 +1,5 @@
 
-##Multitouch Simulator
+## Multitouch Simulator
 
 Multitouch Simulator using mediapipe pose for fully body tracking and orbbec astra for 3d mapping. Using the mediapipe pose landmark 20 (right index) for mouse movement and action. 
 
